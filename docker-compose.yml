@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app/src
+    profiles:
+      - prod
+
+  agent-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    env_file:
+      - .env
+    volumes:
+      - agent-dev-venv:/app/.venv
+    environment:
+      - PYTHONPATH=/app/src
+      - DEV_QUERY=${DEV_QUERY:-What is Python 3.12?}
+      - DEV_MOCK=${DEV_MOCK:-1}
+    command: sh -c "uv sync --frozen && uv run python -m adk_agent_test.main research \"${DEV_QUERY:-What is Python 3.12?}\" --mock"
+    stdin_open: true
+    tty: true
+    develop:
+      watch:
+        - path: ./src
+          action: rebuild
+    profiles:
+      - dev
+
+volumes:
+  agent-dev-venv:
