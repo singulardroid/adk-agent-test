@@ -2,9 +2,9 @@
 
 import functools
 import importlib
-import os
 from typing import Any, Callable
 
+from ..config import is_mock_tools
 from ..logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -20,7 +20,7 @@ def mockable(real_func: Callable) -> Callable:
     logger.debug("mock_name=%s", mock_name)
     module = importlib.import_module(real_func.__module__)
     logger.debug("module=%s", module)
-    use_mock = os.getenv("ADK_MOCK_TOOLS", "0") == "1" and hasattr(module, mock_name)
+    use_mock = is_mock_tools() and hasattr(module, mock_name)
     logger.debug("use_mock=%s", use_mock)
     if use_mock:
         mock_func = getattr(module, mock_name)
