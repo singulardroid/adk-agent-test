@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "openai>=2.19",
     "openai-agents>=0.9.0",
+    "python-pptx>=0.6.21",
     "rich",
     "typer",
     "python-dotenv>=1.2.1",
@@ -37,3 +38,9 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests that call real APIs (deselect with '-m \"not integration\"')",
+]

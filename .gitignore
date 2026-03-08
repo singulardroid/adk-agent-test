@@ -202,6 +202,13 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Generated PowerPoint outputs
+results/
+oil_sales_2025.pptx
+
+# macOS
+.DS_Store
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
