@@ -43,7 +43,9 @@ def research(
     logger.info("research() entry query=%r mock=%s", query[:50], mock)
     if mock:
         os.environ["ADK_MOCK_TOOLS"] = "1"
-        logger.debug("ADK_MOCK_TOOLS=1 set")
+        logger.info("ADK_MOCK_TOOLS=1 set (mock tools will be used)")
+    else:
+        os.environ["ADK_MOCK_TOOLS"] = "0"
     from .agent import run_research_agent
 
     logger.debug("run_research_agent imported")

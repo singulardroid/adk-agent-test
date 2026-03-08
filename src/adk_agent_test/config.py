@@ -1,5 +1,7 @@
 """Application configuration loaded from environment variables."""
 
+import os
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from openai import AsyncOpenAI, OpenAI
@@ -65,6 +67,11 @@ class Settings(BaseSettings):
         logger.debug("client=%s", client)
         logger.info("build_async_client() exit")
         return client
+
+
+def is_mock_tools() -> bool:
+    """True if ADK_MOCK_TOOLS=1 in the environment (use mock tool implementations)."""
+    return os.environ.get("ADK_MOCK_TOOLS", "0") == "1"
 
 
 logger.debug("Creating SETTINGS")

@@ -7,9 +7,10 @@ from typing import Optional
 from agents import Agent, ItemHelpers, ModelSettings, Runner, function_tool
 from openai import AsyncOpenAI
 
-from .config import SETTINGS, async_client
+from .config import SETTINGS, async_client, is_mock_tools
 from .cost_tracker import CostTracker
-from .tools.web import browse, execute_python, search_web
+from .tools.powerpoint import create_powerpoint
+from .tools.web import browse_page, execute_python, web_search
 
 
 def _format_tool_call_reasoning(name: str, arguments: str) -> str:
@@ -18,20 +19,23 @@ def _format_tool_call_reasoning(name: str, arguments: str) -> str:
         args = json.loads(arguments) if arguments else {}
     except json.JSONDecodeError:
         return f"[Tool: {name}]"
-    if name == "search_web":
+    if name == "web_search":
         q = args.get("query", "")
         n = args.get("num_results", 10)
-        return f'[Tool: search_web] Searching: "{q[:60]}{"..." if len(q) > 60 else ""}" (up to {n} results)'
-    if name == "browse":
+        return f'[Tool: web_search] Searching: "{q[:60]}{"..." if len(q) > 60 else ""}" (up to {n} results)'
+    if name == "browse_page":
         url = args.get("url", "")
         instr = (args.get("instructions") or "")[:50]
-        return f"[Tool: browse] Browsing {url}" + (f" — {instr}..." if instr else "")
+        return f"[Tool: browse_page] Browsing {url}" + (f" — {instr}..." if instr else "")
     if name == "execute_python":
         code = (args.get("code") or "").strip()
         preview = code.split("\n")[0][:50] if code else "(no code)"
         return f"[Tool: execute_python] Running: {preview}{'...' if len(code) > 50 else ''}"
+    if name == "create_powerpoint":
+        path = args.get("output_path", "output.pptx")
+        content_len = len(args.get("content", ""))
+        return f"[Tool: create_powerpoint] Saving to {path} ({content_len} chars)"
     return f"[Tool: {name}]"
-
 
 def _model_supports_temperature(model_id: str) -> bool:
     """True if the model accepts the temperature parameter (o3/o4 family do not)."""
@@ -54,9 +58,10 @@ class ResearchAgent:
         self.client: AsyncOpenAI = async_client
         self.tracker = CostTracker()
         self.tools = [
-            function_tool(browse),
-            function_tool(search_web),
+            function_tool(browse_page),
+            function_tool(web_search),
             function_tool(execute_python),
+            function_tool(create_powerpoint),
         ]
         if _model_supports_temperature(self.model):
             model_settings = ModelSettings(
@@ -65,17 +70,19 @@ class ResearchAgent:
             )
         else:
             model_settings = ModelSettings(max_tokens=self.max_tokens)
+        instructions = (
+            "You are an expert research assistant. "
+            "For research questions you MUST use web_search first to find sources, then use browse_page to read specific URLs. "
+            "Do not answer from memory alone—always call tools to get current, citable information. "
+            "Use execute_python only when mathematical or data processing is explicitly required. "
+            "When the user asks to save or export the result to PowerPoint, use the create_powerpoint tool with your summary. "
+            "Cite every source with its full URL. Never hallucinate information."
+        )
         self._agent = Agent(
             name="ResearchAssistant",
             model=self.model,
             model_settings=model_settings,
-            instructions=(
-                "You are an expert research assistant. "
-                "For research questions you MUST use search_web first to find sources, then use browse to read specific URLs. "
-                "Do not answer from memory alone—always call tools to get current, citable information. "
-                "Use execute_python only when mathematical or data processing is explicitly required. "
-                "Cite every source with its full URL. Never hallucinate information."
-            ),
+            instructions=instructions,
             tools=self.tools,
         )
 
@@ -84,16 +91,20 @@ class ResearchAgent:
         result = Runner.run_streamed(agent, input=query, max_turns=self.max_turns)
         print(f"User query: {query}\n")
         print("Agent thinking...\n")
+        mock_disclaimer_printed = False
         async for event in result.stream_events():
             if event.type == "raw_response_event":
                 continue
             if event.type == "run_item_stream_event":
                 if event.name == "message_output_created":
+                    if is_mock_tools() and not mock_disclaimer_printed:
+                        print("This response was generated without real tool use (mock mode).\n", flush=True)
+                        mock_disclaimer_printed = True
                     text = ItemHelpers.text_message_output(event.item)
                     if text:
                         print(text, end="", flush=True)
                 elif event.name == "tool_called":
-                    # SDK is about to run the tool (see tools/web.py: browse, search_web, execute_python)
+                    # SDK is about to run the tool (see tools/web.py: browse_page, web_search, execute_python)
                     raw = getattr(event.item, "raw_item", None)
                     name = getattr(raw, "name", None) if raw else None
                     args_str = getattr(raw, "arguments", None) if raw else None
